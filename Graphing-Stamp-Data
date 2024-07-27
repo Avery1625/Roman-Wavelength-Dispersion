@@ -1,0 +1,168 @@
+from busy import reduc_graph_single, source_detection
+import matplotlib.pyplot as plt
+import astropy.io.fits as fits
+import numpy as np
+
+#opening stamp data, from Duke University's Arun Kannawadi Jayaraman
+stomp = ['stamp1.fits','stamp2.fits', 'stamp3.fits']
+with fits.open('flat_seds.fits') as stanley:
+    stanley.info()
+    stanlata=stanley[0].data
+
+#file of areas of Roman instruments
+areas = open('/Users/jakobbyrne/Desktop/SpectrAnalysis/Roman_effarea_20210614.txt', "r").read()
+
+h=6.626*10**-34    #plancks constant, j/hz
+c=3*10**8  #speed of light, m/s
+area = []
+waveds = []
+rows = areas.split('\n')
+for i in range(0,len(rows)):
+    values = rows[i].split('   ')
+
+    try:
+        if type(float(values[9])) == float:
+            waveds.append(float(values[0]))  #wavelength column
+            area.append(float(values[9]))   #area of grism column
+    except ValueError:
+        pass
+
+#Graphing function
+def printy(x_name,y_name,x,y,title,savey):
+    print('pltoed')
+    plt.plot(x,y)
+    plt.title(title)
+    plt.xlabel(x_name)
+    plt.ylabel(y_name)
+    plt.savefig(savey+'.png')
+    plt.cla()
+    plt.clf()    
+    plt.close()
+
+def stamp_graph(stampc, a):  #extracting wavelength and flux
+    try:
+        inx, iny = source_detection(stampc)
+        print(inx,iny)
+        fluxstamp,wavestamp,p,s=reduc_graph_single(inx[0],iny[0],stampc, a)
+
+    except AttributeError:
+        inx, iny = 0.0, 0.0
+        fluxstamp,wavestamp,p,s = reduc_graph_single(inx,iny,stampc, a)
+
+    return wavestamp,fluxstamp, p, s
+
+#opening the stamp files
+with fits.open(stomp[0]) as stampy:
+    stamp1 = stampy[0].data
+
+
+with fits.open(stomp[1]) as stampy:
+    stamp2 = stampy[0].data
+
+
+with fits.open(stomp[2]) as stampy:
+    stamp3 = stampy[0].data
+
+
+def flatty(wavestamp,fluxstamp):
+    adjflux=[]
+    waves=[]
+    added_wavelengths = set()
+   
+
+
+    for i in range(len(wavestamp)):
+        for j in range(len(waveds)):
+            if abs(wavestamp[i]/10**4-waveds[j]) < 1*10**-1:
+                if wavestamp[i]/10**4 not in added_wavelengths:
+                    added_wavelengths.add(wavestamp[i]/10**4)
+                    print(wavestamp[i]/10**4, waveds[j])
+                    if area[i] != 0:
+                        adjflux.append(fluxstamp[i] / area[i])
+                        waves.append(wavestamp[i])
+                    else:
+                        adjflux.append(0)
+                        waves.append(wavestamp[i])
+    print(len(adjflux))
+    printy('Wavelength, Angstroms','Area-Adjusted Flux', waves, adjflux,'Flat Adjusted','flat' )
+
+#finding f_nu from f_lambda
+def f_nu(wavestamp, fluxstamp, h, c, waveds, area):
+    adjflux = []
+    waves = []
+    added_wavelengths = set()
+    print(len(wavestamp),len(waveds))
+    for j in range(len(waveds)):
+        for i in range(len(wavestamp)):
+            if wavestamp[i] != 0 and waveds[j] != 0:
+                if abs(wavestamp[i]/10**4-waveds[j]) < 1*10**-1:   #if wavelength is close enough
+                    if wavestamp[i]/10**4 not in added_wavelengths:
+                        added_wavelengths.add(wavestamp[i]/10**4)
+                        if area[i] != 0 and wavestamp[i] != 0:
+                            # Calculate flat flux density (F_nu) using the formula F_nu = flux / (wavelength^2)
+                            E_photon = h * c / wavestamp[i]
+                            F_lambda = fluxstamp[i] * E_photon
+                            f_nu = F_lambda * (wavestamp[i]**2) / c
+                            adjflux.append(f_nu)
+                            waves.append(wavestamp[i])
+                        else:
+                            adjflux.append(0)
+                            waves.append(wavestamp[i])
+                         
+    printy('Wavelength, Angstroms', 'Flat Flux Density (F_nu)', waves, adjflux, 'Flat Fnu Spectrum', 'fnu_spectrum')  #graoh the spectra
+    return waves,adjflux
+
+#finding f_lam from flat f
+def f_lam(wavestamp, fluxstamp, h, c, waveds, area):  
+    adjflux = []
+    waves = []
+    added_wavelengths = set()
+    print(len(wavestamp),len(waveds))
+    for j in range(len(waveds)):
+        for i in range(len(wavestamp)):
+            if wavestamp[i] != 0 and waveds[j] != 0:
+                if abs(wavestamp[i]/10**4-waveds[j]) < 1*10**-1:
+                    if wavestamp[i]/10**4 not in added_wavelengths:
+                        added_wavelengths.add(wavestamp[i]/10**4)
+                        if area[i] != 0 and wavestamp[i] != 0:
+                            # Calculate f_lam from flat flux using energy of photon
+                            E_photon = h * c / wavestamp[i]
+                            F_lambda = fluxstamp[i] * E_photon
+                            adjflux.append(F_lambda)
+                            waves.append(wavestamp[i])
+                        else:
+                            adjflux.append(0)
+                            waves.append(wavestamp[i])
+    return waves,adjflux
+
+convert=[stamp1,stamp2]
+
+#graphing converted spectra for selected stamps, each are converting to f_lam
+for i in range(len(convert)):
+    g,higgs, p, s = stamp_graph(convert[i],0)
+    wavey,fluxy=f_lam(g,higgs, h, c, waveds, area)
+    plt.plot(wavey, fluxy)
+    plt.title(f'F_nu stamp{i+1} Converted Spectra')
+    plt.xlabel('Wavelength, Angstroms')
+    plt.ylabel('Cumulative Flux, BLANK UNITS')
+    # plt.axvline(x = 12000, color = 'orange', label = '12000 Angstroms')
+    # plt.xlim(7800, 18000)
+    plt.savefig(f'spectra_plot_nustamp{i+1}.png')
+    plt.cla()
+    plt.clf()    
+    plt.close()
+
+#stamp 3 converts to f_nu
+wn,fn, pn, sn = stamp_graph(stamp3,0)
+wavenu,fluxnu=f_nu(wn,fn, h, c, waveds, area)
+plt.plot(wavenu, fluxnu)
+plt.title(f'F_nu stamp3 Converted Spectra')
+plt.xlabel('Wavelength, Angstroms')
+plt.ylabel('Cumulative Flux, BLANK UNITS')
+# plt.axvline(x = 12000, color = 'orange', label = '12000 Angstroms')
+# plt.xlim(7800, 18000)
+plt.savefig(f'spectra_plot_nustamp3.png')
+plt.cla()
+plt.clf()    
+plt.close()
+
