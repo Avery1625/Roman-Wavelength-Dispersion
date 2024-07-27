@@ -1,4 +1,4 @@
-from busy import reduc_graph_single, source_detection
+from Spectra-Creation import reduc_graph_single, source_detection
 import matplotlib.pyplot as plt
 import astropy.io.fits as fits
 import numpy as np
