@@ -4,9 +4,9 @@ from astropy.stats import sigma_clipped_stats
 import numpy as np
 import matplotlib.pyplot as plt
 import astropy.io.fits as fits
-from pix_radec import radec_func
-from main_spa import woco
-from wavely_func import invwavely
+from Pixel-RA-DEC-Conversion import radec_func
+from Indentifying-Pixels import woco
+from Pixel-to-Wavelength-Formula import invwavely
 import pandas as pd
 
 
