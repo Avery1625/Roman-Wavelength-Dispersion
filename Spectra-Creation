@@ -1,0 +1,147 @@
+# Necessary imports
+from photutils.detection import DAOStarFinder
+from astropy.stats import sigma_clipped_stats
+import numpy as np
+import matplotlib.pyplot as plt
+import astropy.io.fits as fits
+from pix_radec import radec_func
+from main_spa import woco
+from wavely_func import invwavely
+import pandas as pd
+
+
+#List of galaxies, redshift, RA/Dec
+df = pd.read_parquet('galaxy_10430.parquet', engine='fastparquet')
+
+
+with fits.open('Roman_TDS_simple_model_SNPrism_36462_5.fits') as goose:
+    # goose.info()
+    vsata = goose[1].data  # Assuming the relevant data is in the second HDU
+
+
+with fits.open('Roman_TDS_simple_model_H158_36462_5.fits') as doose:
+    # doose.info()
+    stata = doose[1].data  # Assuming the relevant data is in the second HDU
+
+
+add_factor = 0.0   #amount that simulated spectra must be shifted to line up with truth spectra
+
+
+conversion_factor_fs = 1.0 * 10**-31  #multiplies flux of simulated spectra
+conver_fact_wt = 1.0 * 10.0**0    #multiplies wavelength of truth spectra (.tar file)
+
+
+def source_detection(stata): #detects the sources of the objects in the image
+    mean, median, std = sigma_clipped_stats(stata, sigma=3.0)
+    print(mean, median, std)
+   
+    daofind = DAOStarFinder(fwhm=3.0, threshold=5.0 * std)
+    sources = daofind(stata - median)
+   
+    for col in sources.colnames:
+        if col not in ('id', 'npix'):
+            sources[col].info.format = '%.2f'    
+    return sources['xcentroid'].tolist(), sources['ycentroid'].tolist()
+
+
+x_centroids, y_centroids = source_detection(stata)   #x and y positions of all the objects in the image
+
+
+def reddy(indey, index):   #takes in x and y positions of simulated objects and returns the real object that corresponds to them
+    target_ra, target_dec = radec_func(index, indey, woco)
+    df['distance'] = np.sqrt((df['ra'] - target_ra) ** 2 + (df['dec'] - target_dec) ** 2)   #distance formula of coordinates of real and simulated objects
+    closest_match = df.loc[df['distance'].idxmin()]   #real object where distance is smallest
+    return closest_match['redshift'], closest_match['galaxy_id']  #redshift and galaxy ID of said object
+
+
+def reduc_graph_single(inx,iny, vsata):   #analyze simulated objects to determine their flux and wavelength
+    flux_s = []
+    w_1 = []
+    inx = int(inx)
+    iny = int(iny)
+
+
+    for i in range(max(iny - 300, 0), min(iny + 300, vsata.shape[0])): #iterating up/down through pixels
+        flux_sum = vsata[i, inx]
+        for a in range(inx + 1, inx + 20):   #measure flux to the right of object
+            fluxy = vsata[i, a]
+            flux_s.append(fluxy)
+            dx = i-iny
+            w_1.append(invwavely(dx))     #converting pixel position to wavelength  
+
+
+        for b in range(inx - 20, inx -1):  #measure flux to the left of object
+            fluxy = vsata[i, b]
+            flux_s.append(fluxy)
+            dx = i-iny
+            w_1.append(invwavely(dx))
+        dx = i-iny
+        w_1.append(invwavely(dx))
+        flux_s.append(flux_sum)
+
+
+    return flux_s, w_1
+   
+
+
+def new2plot(inx,iny, conversion_factor_fs, conver_fact_wt, vsata, q, moose, add_factor, galid):   #make graph of both truth and simulated spectra
+    flux_sim, w_1 = reduc_graph_single(inx,iny,vsata)  #flux and position of simulated data
+ 
+    flucsim = []
+    wave_sim = []
+    wavelength_real = []
+    flux_real = []
+   
+    i = 0
+    while i in range(len(moose)): #reading the wavelength and flux truth spectra files
+        waveleng = moose[i:i+25]
+        flud = moose[i+25:i+50]
+        i +=50
+        wavelength_real.append(float(waveleng))
+        flux_real.append(float(flud))
+   
+    for lag in flux_sim: #converting flux to align with truth
+        fconver = lag * conversion_factor_fs
+        flucsim.append(fconver)
+   
+    for i in w_1: #converting wavelength to align emission lines with truth
+        wave_sim.append(float(i) * float(conver_fact_wt) + add_factor)
+
+
+    plt.figure()
+    plt.scatter(wavelength_real,flux_real,label='Truth Spectra', s=1)
+    plt.scatter(wave_sim,flucsim,label='Simulated Spectra', s=1, color='orange')
+    plt.title(f'Truth and Simulated Spectra of {galid}')
+    plt.xlabel('Wavelength, Angstroms')
+    plt.ylabel('All Flux, BLANK UNITS')
+    # plt.xlim(7800, 18000)
+    plt.legend()
+    plt.savefig(f'new truth v sim/truth v sim complete/spectra_plot{inx}.png')
+    plt.cla()
+    plt.clf()    
+    plt.close()
+
+
+#list of galaxy ids with known emission lines
+galiddies=[10430000075686.0, 10430000075696.0, 10430000075718.0, 10430000075722.0, 10430000075727.0, 10430000075783.0, 10430000094263.0, 10430000095555.0, 10430000102632.0,10430000110432.0, 10430000110446.0, 10430000216978.0, 10430000300379.0, 10430000303682.0, 10430000303690.0,10430100528316.0,10430100893549.0,10430100893549.0,10430100902364.0, 10430101004678.0,10430101004680.0, 10430200186193.0, 10430200399672.0, 10430200521980.0, 10430200589651.0,10430100925632,10430000124135]
+
+
+def leforté(y_centroids,x_centroids,moose,galiddy):    #read through the detected peaks, matching galaxy ids with the galaxy ids of the chosen truth spectra
+    for q in range(min(len(x_centroids),len(y_centroids))) :
+        redshift, galid = reddy(y_centroids[q],x_centroids[q])
+        if float(galid) == float(galiddy):  
+            new2plot(x_centroids[q],y_centroids[q], conversion_factor_fs, conver_fact_wt, vsata, q, moose, add_factor, galid)
+            break
+       
+def runnin_for(galiddies):  
+    for k in galiddies:
+        woos = open('/Users/jakobbyrne/Desktop/SpectrAnalysis/seds/sed_'+str(k)+'.txt', 'r').read()  #select files of galaxies with selected galaxy ids
+        leforté(y_centroids,x_centroids,woos,k)   #create truth and simulated spectra of these galaxies        
+
+
+runnin_for(galiddies)
+
+
+
+
+
