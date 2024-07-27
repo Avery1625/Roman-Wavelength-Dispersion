@@ -1,0 +1,42 @@
+import math
+
+def wavely(w): #wavelength to pixel position
+    w = w/10000   #conversion to angstrom
+    dx = (-12.973976 + 213.353667*(w - 1.0) + -20.254574*(w - 1.0)**2)/(1.0 + 1.086448*(w - 1.0) + -0.573796*(w - 1.0)**2)  #wavelength to pixel, from M. Troxel's GitHub repositoryu
+    return dx
+
+def invwavely(dx):    #pixel to wavelength
+    dx = float(dx)
+    #coefficients of pixel to wavelength quadratic equation
+    a = -20.254574 + 0.573796 * dx    
+    b = 213.353667 - 1.086448 * dx
+    c = -12.973976 - dx
+   
+    discriminant = b**2 - 4*a*c  
+   
+    if discriminant < 0:
+        raise ValueError("Cannot convert to wavelength. The discriminant is negative, indicating no real solution.")
+   
+    w1 = 10000*(((-b + math.sqrt(discriminant)) / (2*a)) + 1)
+    w2 = 10000*(((-b - math.sqrt(discriminant)) / (2*a)) + 1)
+
+    wone = min(w1, w2)   #smaller of two solutions
+    watoo = max(w1, w2)   #larger of two solutions
+
+    #Selecting which wavelength to use
+    if wone>7000 and watoo>7000 and wone <=18500 and watoo<=18500:    #if both wavelengths are inside Roman's range
+        print('Unable to select a wavelength')
+    if wone > 7000 and wone<=18500:   #if min solution is in range
+        return wone
+    elif watoo > 7000 and watoo<=18500:   #if max solution is in range
+        return watoo
+    elif watoo>0 and wone>0:   #select min positive solution if neither are in range but both are positive
+        return wone
+    else:    #if neither wavelength is positive
+        # print(wone, watoo)
+        return watoo
+
+
+
+
+
