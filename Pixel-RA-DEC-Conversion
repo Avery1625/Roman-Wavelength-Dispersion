@@ -1,6 +1,6 @@
 from astropy.wcs.utils import pixel_to_skycoord
 from astropy.coordinates import SkyCoord, ICRS
-from main_spa import woco
+from Identifying-Pixels import woco
 
 def radec_func(xp,yp, woco):
     skycoord = pixel_to_skycoord(xp, yp, woco, origin=1)
