@@ -1,0 +1,43 @@
+from astropy.wcs.utils import pixel_to_skycoord
+from astropy.coordinates import SkyCoord, ICRS
+from main_spa import woco
+
+def radec_func(xp,yp, woco):
+    skycoord = pixel_to_skycoord(xp, yp, woco, origin=1)
+    # print(f"RA: {skycoord.ra}, Dec: {skycoord.dec}")
+    return skycoord.ra.deg, skycoord.dec.deg
+
+from astropy.wcs.utils import pixel_to_skycoord, skycoord_to_pixel
+from astropy.coordinates import SkyCoord, ICRS
+import astropy.io.fits as fits
+from astropy.wcs import WCS
+import numpy as np
+from main_spa import woco
+
+# from main_spa import woco
+with fits.open('Roman_TDS_simple_model_H158_36462_5.fits') as goose:
+    # goose.info()
+    woco = WCS(goose[1].header)
+    data = goose[1].data
+
+#ra and dec of first object
+ra1=7.585271095
+dec1 = -44.84037278
+
+#ra and dec of second object
+ra2 =7.594501071557163
+dec2 = -44.83305885867979
+
+#convert ra and dec to pixels
+def px_func(ra,dec, woco):
+    try:
+        coords = SkyCoord(ra, dec, frame='icrs', unit='deg')
+        indx, indy = skycoord_to_pixel(coords, woco, origin=1, mode='all')
+        print(f"RA: {ra}, Dec: {dec} -> Pixel: ({indx}, {indy})")
+        return float(indx), float(indy)
+    except Exception as e:
+        print(f"Error converting RA: {ra}, Dec: {dec} -> {e}")
+        return np.nan, np.nan
+
+print(px_func(ra1, dec1,woco))
+print(px_func(ra2, dec2,woco))
